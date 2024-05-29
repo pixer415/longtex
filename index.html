@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+  <title>longtex</title>
+  <head>
+    <style>
+      html, body {
+        background-color: black;
+        height: 100%;
+        width: 100%;
+        overflow-y: hidden;
+        margin: 0;
+      }
+      textarea {
+        width: 100vw;
+        height: 100%;
+	min-height: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
+        border-width: 5vh;
+        padding: 10vh;
+        resize: none;
+      }
+      :focus {
+        outline: none;
+      }
+    </style>
+  </head>
+  <body onload="getP()">
+    <textarea wrap="hard" id="test" name="turbotex" maxlength="524288" placeholder=""></textarea>
+  </body>
+  <script>
+    function getP() {
+      // setup
+      const urlParams = new URLSearchParams(window.location.search);
+      const box = document.getElementById("test");
+      let focused = "inset 0 0 0 3px hsla(0, 0%, 0%, 100%)";
+      let pattrn = null;
+      let pport = null;
+      let lastValue = "";
+
+      // send updated value to extension
+      function update() {
+        if (pport) {
+          pport.postMessage(box.value);
+        }
+      }
+
+      // handle params
+      if (urlParams.has('lines')) {
+        try {
+          const sz = 75 / Number(urlParams.get('lines'));
+	  box.style.fontSize = `${sz}vh`;
+          box.style.borderWidth = `${sz * (1/15)}vh`;
+          box.style.padding = `${sz * (1/7.5)}vh`;
+        } catch(err) {
+	  console.log(err.message);
+          box.style.fontSize = "75vh";
+        }
+      } else {
+	box.style.fontSize = "75vh";
+      }
+      if (urlParams.has('color')) {
+        box.style.color = `${urlParams.get('color')}`;
+        box.style.borderColor = `${urlParams.get('color')}`;
+      }
+      if (urlParams.has('bcolor')) {
+        box.style.backgroundColor = `${urlParams.get('bcolor')}`;
+        const rgb = window.getComputedStyle(box).backgroundColor;
+        const colorArr = rgb.slice(rgb.indexOf("(") + 1, rgb.indexOf(")")).split(", "); 
+        const lum = 0.2126*Number(colorArr[0]) + 0.7152*Number(colorArr[1]) + 0.0722*Number(colorArr[2]);
+        if (lum < 154) {
+           focused = "inset 0 0 0 3vh hsla(0, 100%, 100%, 100%)";
+        }
+      }
+      if (urlParams.has('font')) {
+        box.style.fontFamily = `${decodeURIComponent(urlParams.get('font'))}`;
+      }
+      if (urlParams.has('placeholder')) {
+        box.setAttribute("placeholder", `${decodeURIComponent(urlParams.get('placeholder'))}`);
+      }
+      if (urlParams.has('italic')) {
+        if (Number(urlParams.get('italic')) == 1) {
+          box.style.fontStyle = "italic";
+        }
+      }
+      if (urlParams.has('bold')) {
+        if (Number(urlParams.get('bold')) == 1) {
+          box.style.fontWeight = "bold";
+        }
+      }
+      if (urlParams.has('case')) {
+        if (Number(urlParams.get('case')) == 1) {
+          box.style.textTransform = "uppercase";
+        } else if (Number(urlParams.get('case')) == 0) {
+          box.style.textTransform = "lowercase";
+        }
+      }
+      if (urlParams.has('max')) {
+        box.setAttribute('maxlength', Number(urlParams.get('max')));
+      }
+      if (urlParams.has('pattern')) {
+        let pstr = decodeURIComponent(urlParams.get('pattern'));
+        if (pstr.startsWith("/") && pstr.endsWith("/")) {
+          pstr = pstr.substring(1, pstr.length - 1);
+        }
+        pattrn = new RegExp(pstr, "");
+      }
+      if (urlParams.has('value')) {
+        const paramValue = `${decodeURIComponent(urlParams.get('value'))}`;
+        if (pattrn === null || pattrn.test(paramValue)) {
+            box.value = paramValue;
+	    lastValue = paramValue;
+        }
+      }
+	    
+      // listeners
+      function do_on_input(e) {
+        if (e.target.value.length > box.getAttribute("maxlength")) {
+            e.target.value = e.target.value.slice(0, box.getAttribute("maxlength"));
+	}
+	if (pattrn !== null && !pattrn.test(e.target.value)) {
+	    e.target.value = lastValue;
+	} else {
+            lastValue = e.target.value;
+        }
+        update();
+      }	      
+      box.addEventListener("input", do_on_input);
+      box.addEventListener("focus", (e) => {
+        e.target.style.boxShadow = focused;
+      });
+      box.addEventListener("blur", (e) => {
+        e.target.style.boxShadow = "";
+      });
+      // get port from extension
+      window.addEventListener("message", onMessage);
+      function onMessage(e) {
+        if (e.data === "request") {
+          pport = e.ports[0];
+	  // send initial value to extension
+          update();
+        }
+      }
+    }
+  </script>
+</html>
